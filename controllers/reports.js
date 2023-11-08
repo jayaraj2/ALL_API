@@ -9,7 +9,7 @@ var logger = require("morgan");
 const cors = require('cors');
 
 const getConsolidatedBill = (req, res) => {
-  const { branch, city, state, start, end, status, payment_status } = req.query;
+  const { branch, city, state, start, end } = req.query;
   const usersData = JSON.parse(fs.readFileSync('datas/users.json'));
   const consolidatedBillDataPath = 'datas/consolidated_bill.json';
   const masterBranches = JSON.parse(fs.readFileSync('datas/master_branches.json'));
@@ -20,6 +20,7 @@ const getConsolidatedBill = (req, res) => {
     total_branch_sum_paid: 0.0,
     total_branch_sum_partial: 0.0,
     total_branch_sum_all_statuses: 0.0,
+    Service_Type: "Consolidated bill"
   };
 
   const fileStream = fs.createReadStream(consolidatedBillDataPath, { encoding: 'utf8' });
@@ -41,8 +42,8 @@ const getConsolidatedBill = (req, res) => {
 
     const isMatchingCity = !city || branchInfo.branch_city_id == city;
     const isMatchingState = !state || branchInfo.branch_state_id == state;
-    const isMatchingStatus = !status || data.status === status;
-    const isMatchingPaymentStatus = !payment_status || data.payment_status === payment_status;
+    // const isMatchingStatus = !status || data.status === status;
+    // const isMatchingPaymentStatus = !payment_status || data.payment_status === payment_status;
 
     if ((!branch || branch === branchId) && isWithinDateRange && isMatchingCity && isMatchingState) {
       if (!branchData[branchId]) {
@@ -189,7 +190,7 @@ const medical_equipemts = (req, res) => {
     }
 
     if (totalSum > 0) {
-      response.unshift({ total_medical_equipment_amount: totalSum.toFixed(2) });
+      response.unshift({ total_medical_equipment_amount: totalSum.toFixed(2), Service_Type: "Medcial Equipements" });
     }
 
     res.json(response);
@@ -204,7 +205,7 @@ const fb = (req, res) => {
   const masterFoodBevarages = JSON.parse(fs.readFileSync('datas/master_food_bevarages.json'));
 
   const branchData = {};
-  let totalFBAmount = 0.0;
+  const totalBranchSum = {};
 
   const fileStream = fs.createReadStream(patientFBDataPath, { encoding: 'utf8' });
   const jsonStream = JSONStream.parse('*');
@@ -222,13 +223,15 @@ const fb = (req, res) => {
     }
 
     const branchInfo = masterBranches.find((branch) => branch.id === branchId);
+    global.branchey = masterBranches.find((branch) => branch.id === branchId);
 
     if (
-      (!city || branchInfo.branch_city_id == city) &&
-      (!state || branchInfo.branch_state_id == state)
+      ((!branch || branch === 'all' || branch === branchId) &&
+        (!city || branchInfo.branch_city_id == city) &&
+        (!state || branchInfo.branch_state_id == state))
     ) {
       if (!branchData[branchId]) {
-        branchData[branchId] = { data: {} };
+        branchData[branchId] = { data: [] };
       }
 
       const activityDate = new Date(data.created_at);
@@ -243,16 +246,6 @@ const fb = (req, res) => {
           const itemName = fbData.item_name;
           const fbAmount = parseFloat(data.fb_amount) || 0;
 
-          if (!branchData[branchId].data[itemName]) {
-            branchData[branchId].data[itemName] = {
-              total_amount: 0.0,
-              details: [],
-            };
-          }
-
-          branchData[branchId].data[itemName].total_amount += fbAmount;
-          totalFBAmount += fbAmount;
-
           const userDetails = {
             patient_id: data.patient_id,
             first_name: usersData.find((user) => user.id === data.patient_id)?.first_name || 'N/A',
@@ -260,12 +253,22 @@ const fb = (req, res) => {
             fb_amount: data.fb_amount || "Not found",
             invoice_status: data.invoice_status,
             payment_status: data.payment_status,
+            service: itemName,
           };
 
-          branchData[branchId].data[itemName].details.push({
-            ...userDetails,
-            service: itemName,
-          });
+          if (fbAmount > 0) {
+            branchData[branchId].data.push({
+              branch: branchId,
+              branch_name: branchInfo.branch_name,
+              ...userDetails,
+            });
+
+            if (!totalBranchSum[branchId]) {
+              totalBranchSum[branchId] = 0.0;
+            }
+
+            totalBranchSum[branchId] += fbAmount;
+          }
         }
       }
     }
@@ -273,56 +276,36 @@ const fb = (req, res) => {
 
   jsonStream.on('end', () => {
     const response = [];
-  
+
     for (const branchId in branchData) {
-      if (!branchData[branchId]) {
-        continue;
-      }
-  
-      const branchResponse = {
+      response.push({
         branch: branchId,
-        data: Object.keys(branchData[branchId].data)
-          .map((itemName) => ({
-            branch: branchId,
-            total_amount: branchData[branchId].data[itemName].total_amount.toFixed(2),
-            item: branchData[branchId].data[itemName].details
-              .filter((detail) => parseFloat(detail.fb_amount) !== 0)
-              .map((detail) => ({
-                ...detail,
-                service: itemName,
-              })),
-          }))
-          .filter((item) => item.item.length > 0), 
-      };
-  
-      if (branchResponse.data.length > 0) {
-        response.push(branchResponse);
-      }
-    }
-  
-    let totalSum = 0.0;
-  
-    response.forEach((branchResponse) => {
-      branchResponse.data.forEach((item) => {
-        item.item.forEach((detail) => {
-          totalSum += parseFloat(detail.fb_amount);
-        });
+        total_amount: totalBranchSum[branchId].toFixed(2),
+        data: branchData[branchId].data,
       });
-    });
-  
+    }
+
+    let totalSum = 0.0;
+
+    for (const branchId in totalBranchSum) {
+      totalSum += totalBranchSum[branchId];
+    }
+
     if (!isNaN(totalSum)) {
-      response.unshift({ total_fb_amount: totalSum.toFixed(2) });
+      response.unshift({ total_fb_amount: totalSum.toFixed(2), service_type: "Food & Beverages" });
     } else {
       response.unshift({ total_fb_amount: '0.00' });
     }
-  
+
     if (response.length > 0) {
       res.json(response);
     } else {
-      res.status(404).json({ message: 'No data found' });
+      res.status(404).json({ message: 'No data found', service_type: "Food & Beverages" });
     }
   });
 };
+
+
   
 const personal_care = (req, res) => {
   const { branch, start, end, city, state } = req.query;
@@ -411,7 +394,7 @@ const personal_care = (req, res) => {
         };
         response.push(branchResponse);
       }
-      response.unshift({ total_sum_personal_care: totalSumPersonalCare.toFixed(2) });
+      response.unshift({ total_sum_personal_care: totalSumPersonalCare.toFixed(2), service_Type: "Personal Care" });
     }
 
     res.json(response);
@@ -516,7 +499,7 @@ const procedural_service = (req, res) => {
 
       const totalSumProcedureService = response.reduce((sum, branch) => sum + parseFloat(branch.total_procedure_service_amount), 0).toFixed(2);
       if (totalSumProcedureService > 0) {
-        response.unshift({ total_procedure_service_amount: totalSumProcedureService });
+        response.unshift({ total_procedure_service_amount: totalSumProcedureService, Service_Type: "Procedural Service" });
       }
     }
 
@@ -607,7 +590,7 @@ const patient_advance = (req, res) => {
           totalSumActivityRate += branchData[branchId].total_activity_rate;
         }
   
-        response.unshift({ total_activity_rate: totalSumActivityRate.toFixed(2) });
+        response.unshift({ total_activity_rate: totalSumActivityRate.toFixed(2), Service_Type: "patient_advance" });
       }
   
       res.json(response);
@@ -784,7 +767,7 @@ const patient_advance = (req, res) => {
             response.push(branchResponse);
         }
 
-        response.unshift({ total_branch_staff_extra_amount: totalAllBranchAmount.toFixed(2) });
+        response.unshift({ total_branch_staff_extra_amount: totalAllBranchAmount.toFixed(2), service_Type: "Staff Extra service" });
 
         for (const branchId in branchData) {
             const branchTotal = {
@@ -792,7 +775,7 @@ const patient_advance = (req, res) => {
                 total_branch_staff_extra_amount: response
                     .filter((item) => item.branch === branchId)
                     .reduce((sum, item) => sum + parseFloat(item.total_branch_staff_extra_amount), 0)
-                    .toFixed(2),
+                    .toFixed(2)
             };
             response.push(branchTotal);
         }
@@ -1061,7 +1044,7 @@ const patient_advance = (req, res) => {
       }
   
       if (totalSum > 0) {
-        response.unshift({ total_emergency_care_amount: totalSum.toFixed(2) });
+        response.unshift({ total_emergency_care_amount: totalSum.toFixed(2),service_Type: "Emergency Care" });
       }
   
       res.json(response);
