@@ -7,6 +7,7 @@ const readline = require('readline');
 const JSONStream = require('JSONStream')
 var logger = require("morgan");
 const cors = require('cors');
+const { EOF } = require("dns");
 
 
 const getConsolidatedBill = (req, res) => {
@@ -140,6 +141,7 @@ const medical_equipemts = (req, res) => {
       return;
     }
 
+   
     const branchId = usersData.find((user) => user.id === data.patient_id)?.branch_id || 'undefined';
     const branchInfo = masterBranches.find((branch) => branch.id === branchId);
 
@@ -298,7 +300,7 @@ const fb = (req, res) => {
       const branchInfo = masterBranches.find((branch) => branch.id === branchId);
       response.push({
         branch_name: branchInfo ? branchInfo.branch_name : 'N/A',
-        total_fb_amount: totalBranchSum[branchId].toFixed(2),
+        total_fb_amount: totalBranchSum[branchId],
         data: branchData[branchId].data,
       });
     }
@@ -454,7 +456,7 @@ const procedural_service = (req, res) => {
       (!state || branchInfo.branch_state_id == state)
     ) {
       if (!branchData[branchId]) {
-        branchData[branchId] = { total_procedure_service_amount: 0.0, data: [] };
+        branchData[branchId] = { total_procedure_amount: 0.0, data: [] };
       }
 
       const activityDate = new Date(data.created_at);
@@ -464,7 +466,7 @@ const procedural_service = (req, res) => {
       ) {
         const procedureServiceAmount = parseFloat(data.procedure_service_amount);
         if (procedureServiceAmount > 0) {
-          branchData[branchId].total_procedure_service_amount += procedureServiceAmount;
+          branchData[branchId].total_procedure_amount += procedureServiceAmount;
 
           const procedureServiceId = data.procedure_service_id;
           const matchingProcedureService = masterProcedureServices.find((service) => service.id === procedureServiceId);
@@ -492,12 +494,12 @@ const procedural_service = (req, res) => {
         const branchName = masterBranches.find((branchItem) => branchItem.id === branch).branch_name;
         const branchResponse = {
           branch_name: branchName,
-          total_procedure_service_amount: branchData[branch].total_procedure_service_amount.toFixed(2),
+          total_procedure_amount: branchData[branch].total_procedure_amount.toFixed(2),
           data: branchData[branch].data,
         };
         response.push(branchResponse);
-        const totalBranchSum = branchData[branch].total_procedure_service_amount.toFixed(2);
-        response.unshift({ branch_name: branchName, total_procedure_service_amount: totalBranchSum });
+        const totalBranchSum = branchData[branch].total_procedure_amount.toFixed(2);
+        response.unshift({ branch_name: branchName, total_procedure_amount: totalBranchSum });
       } else {
         return res.status(404).json({ message: 'No data found for the given branch' });
       }
@@ -510,7 +512,7 @@ const procedural_service = (req, res) => {
           const branchInfo = masterBranches.find((branch) => branch.id === branchId);
           response.push({
             branch_name: branchInfo.branch_name,
-            total_procedure_service_amount: totalSumBranch,
+            total_procedure_amount: totalSumBranch,
             data: filteredData,
           });
         }
@@ -521,15 +523,16 @@ const procedural_service = (req, res) => {
         totalBranchSum[branchId] += parseFloat(totalSumBranch);
       }
 
-      const totalSumProcedureService = response.reduce((sum, branch) => sum + parseFloat(branch.total_procedure_service_amount), 0).toFixed(2);
+      const totalSumProcedureService = response.reduce((sum, branch) => sum + parseFloat(branch.total_procedure_amount), 0).toFixed(2);
       if (totalSumProcedureService > 0) {
-        response.unshift({ total_procedure_service_amount: totalSumProcedureService, Service_Type: "Procedural Service" });
+        response.unshift({ total_procedure_amount: totalSumProcedureService, Service_Type: "Procedural Service" });
       }
     }
 
     res.json(response);
   });
 };
+
 
 const patient_advance = (req, res) => {
     const { branch, start, end, city, state } = req.query;
@@ -792,7 +795,7 @@ const patient_advance = (req, res) => {
 
         for (const branchId in branchData) {
           const branchInfo = masterBranches.find((branch) => branch.id === branchId);
-            const branchResponse = { branch_name: branchInfo ? branchInfo.branch_name : 'N/A', total_branch_staff_extra_amount: totalBranchSum[branchId].toFixed(2), data: branchData[branchId].data };
+            const branchResponse = { branch_name: branchInfo ? branchInfo.branch_name : 'N/A', total_branch_staff_extra_amount: totalBranchSum[branchId], data: branchData[branchId].data };
             response.push(branchResponse);
         }
 
@@ -862,117 +865,117 @@ const patient_advance = (req, res) => {
     res.json(response);
   };
   
-  const membership = (req, res) => {
-    const { city, branch, state, start, end, status, invoice_status } = req.query;
-    const patientsSchedulesDataPath = 'datas/patient_schedules.json';
-    const usersData = JSON.parse(fs.readFileSync('datas/users.json'));
-    const masterBranchesData = JSON.parse(fs.readFileSync('datas/master_branches.json'));
+  // const membership = (req, res) => {
+  //   const { city, branch, state, start, end, status, invoice_status } = req.query;
+  //   const patientsSchedulesDataPath = 'datas/patient_schedules.json';
+  //   const usersData = JSON.parse(fs.readFileSync('datas/users.json'));
+  //   const masterBranchesData = JSON.parse(fs.readFileSync('datas/master_branches.json'));
   
-    const branchData = {};
-    let totalGrossRate = 0;
-    let totalTaxRate = 0;
-    let totalAmount = 0;
-    let totalDiscountValue = 0;
+  //   const branchData = {};
+  //   let totalGrossRate = 0;
+  //   let totalTaxRate = 0;
+  //   let totalAmount = 0;
+  //   let totalDiscountValue = 0;
   
-    const fileStream = fs.createReadStream(patientsSchedulesDataPath, { encoding: 'utf8' });
-    const jsonStream = JSONStream.parse('*');
+  //   const fileStream = fs.createReadStream(patientsSchedulesDataPath, { encoding: 'utf8' });
+  //   const jsonStream = JSONStream.parse('*');
   
-    fileStream.pipe(jsonStream);
+  //   fileStream.pipe(jsonStream);
   
-    jsonStream.on('data', (data) => {
-      if (!data) {
-        return;
-      }
+  //   jsonStream.on('data', (data) => {
+  //     if (!data) {
+  //       return;
+  //     }
   
-      const branchId = data.branch_id;
-      const scheduleDate = new Date(data.schedule_date);
-      const isWithinDateRange = (!start || scheduleDate >= new Date(start)) &&
-        (!end || scheduleDate <= new Date(end));
-      const isMatchingStatus = !status || data.status === status;
-      const isMatchingInvoiceStatus = !invoice_status || data.invoice_status === invoice_status;
+  //     const branchId = data.branch_id;
+  //     const scheduleDate = new Date(data.schedule_date);
+  //     const isWithinDateRange = (!start || scheduleDate >= new Date(start)) &&
+  //       (!end || scheduleDate <= new Date(end));
+  //     const isMatchingStatus = !status || data.status === status;
+  //     const isMatchingInvoiceStatus = !invoice_status || data.invoice_status === invoice_status;
   
-      let branchCity;
-      let branchState;
+  //     let branchCity;
+  //     let branchState;
   
-      if (branchId) {
-        const branchInfo = masterBranchesData.find(branchData => branchData.id === branchId);
-        if (branchInfo) {
-          branchCity = branchInfo.branch_city;
-          branchState = branchInfo.branch_state;
-        }
-      }
+  //     if (branchId) {
+  //       const branchInfo = masterBranchesData.find(branchData => branchData.id === branchId);
+  //       if (branchInfo) {
+  //         branchCity = branchInfo.branch_city;
+  //         branchState = branchInfo.branch_state;
+  //       }
+  //     }
   
-      const isMatchingCity = !city || branchCity === city;
-      const isMatchingBranch = !branch || branch === 'all' || branch === branchId;
-      const isMatchingState = !state || branchState === state;
+  //     const isMatchingCity = !city || branchCity === city;
+  //     const isMatchingBranch = !branch || branch === 'all' || branch === branchId;
+  //     const isMatchingState = !state || branchState === state;
   
-      if ((isMatchingCity || isMatchingBranch || isMatchingState) && isWithinDateRange && isMatchingStatus && isMatchingInvoiceStatus) {
-        if (!branchData[branchId]) {
-          branchData[branchId] = {
-            total_gross_rate_branch: 0,
-            total_tax_rate_branch: 0,
-            total_amount_branch: 0,
-            total_discount_value_branch: 0,
-            data: [],
-          };
-        }
+  //     if ((isMatchingCity || isMatchingBranch || isMatchingState) && isWithinDateRange && isMatchingStatus && isMatchingInvoiceStatus) {
+  //       if (!branchData[branchId]) {
+  //         branchData[branchId] = {
+  //           total_gross_rate_branch: 0,
+  //           total_tax_rate_branch: 0,
+  //           total_amount_branch: 0,
+  //           total_discount_value_branch: 0,
+  //           data: [],
+  //         };
+  //       }
   
-        const grossRate = parseFloat(data.gross_rate) || 0;
-        const taxRate = parseFloat(data.tax_rate) || 0;
-        const amount = parseFloat(data.amount) || 0;
-        const discountValue = parseFloat(data.discount_value) || 0;
+  //       const grossRate = parseFloat(data.gross_rate) || 0;
+  //       const taxRate = parseFloat(data.tax_rate) || 0;
+  //       const amount = parseFloat(data.amount) || 0;
+  //       const discountValue = parseFloat(data.discount_value) || 0;
   
-        branchData[branchId].total_gross_rate_branch += grossRate;
-        branchData[branchId].total_tax_rate_branch += taxRate;
-        branchData[branchId].total_amount_branch += amount;
-        branchData[branchId].total_discount_value_branch += discountValue;
+  //       branchData[branchId].total_gross_rate_branch += grossRate;
+  //       branchData[branchId].total_tax_rate_branch += taxRate;
+  //       branchData[branchId].total_amount_branch += amount;
+  //       branchData[branchId].total_discount_value_branch += discountValue;
   
-        totalGrossRate += grossRate;
-        totalTaxRate += taxRate;
-        totalAmount += amount;
-        totalDiscountValue += discountValue;
+  //       totalGrossRate += grossRate;
+  //       totalTaxRate += taxRate;
+  //       totalAmount += amount;
+  //       totalDiscountValue += discountValue;
   
-        const user = usersData.find(user => user.id === data.user_id);
+  //       const user = usersData.find(user => user.id === data.user_id);
   
-        branchData[branchId].data.push({
-          patient_id: data.patient_id,
-          user_id: data.user_id,
-          first_name: user ? user.first_name : 'N/A',
-          last_name: user ? user.last_name : 'N/A',
-          schedule_date: data.schedule_date,
-          lead_id: data.lead_id,
-          status: data.status,
-          invoice_status: data.invoice_status,
-          branch_city: branchCity,
-          branch_state: branchState,
-        });
-      }
-    });
+  //       branchData[branchId].data.push({
+  //         patient_id: data.patient_id,
+  //         user_id: data.user_id,
+  //         first_name: user ? user.first_name : 'N/A',
+  //         last_name: user ? user.last_name : 'N/A',
+  //         schedule_date: data.schedule_date,
+  //         lead_id: data.lead_id,
+  //         status: data.status,
+  //         invoice_status: data.invoice_status,
+  //         branch_city: branchCity,
+  //         branch_state: branchState,
+  //       });
+  //     }
+  //   });
   
-    jsonStream.on('end', () => {
-      const response = [];
+  //   jsonStream.on('end', () => {
+  //     const response = [];
   
-      for (const branchId in branchData) {
-        response.push({
-          branch: branchId,
-          total_gross_rate_branch: branchData[branchId].total_gross_rate_branch.toFixed(2),
-          total_tax_rate_branch: branchData[branchId].total_tax_rate_branch.toFixed(2),
-          total_amount_branch: branchData[branchId].total_amount_branch.toFixed(2),
-          total_discount_value_branch: branchData[branchId].total_discount_value_branch.toFixed(2),
-          data: branchData[branchId].data,
-        });
-      }
+  //     for (const branchId in branchData) {
+  //       response.push({
+  //         branch: branchId,
+  //         total_gross_rate_branch: branchData[branchId].total_gross_rate_branch.toFixed(2),
+  //         total_tax_rate_branch: branchData[branchId].total_tax_rate_branch.toFixed(2),
+  //         total_amount_branch: branchData[branchId].total_amount_branch.toFixed(2),
+  //         total_discount_value_branch: branchData[branchId].total_discount_value_branch.toFixed(2),
+  //         data: branchData[branchId].data,
+  //       });
+  //     }
   
-      response.unshift({
-        total_gross_rate_branch: totalGrossRate.toFixed(2),
-        total_tax_rate_branch: totalTaxRate.toFixed(2),
-        total_amount_branch: totalAmount.toFixed(2),
-        total_discount_value_branch: totalDiscountValue.toFixed(2),
-      });
+  //     response.unshift({
+  //       total_gross_rate_branch: totalGrossRate.toFixed(2),
+  //       total_tax_rate_branch: totalTaxRate.toFixed(2),
+  //       total_amount_branch: totalAmount.toFixed(2),
+  //       total_discount_value_branch: totalDiscountValue.toFixed(2),
+  //     });
   
-      res.json(response);
-    });
-  };
+  //     res.json(response);
+  //   });
+  // };
   
   const getMedicalEmergencyCare = (req, res) => {
     const { branch, start, end, city, state } = req.query;
@@ -1082,12 +1085,12 @@ module.exports = {
   bill_invoice,
   getConsolidatedBill,
   patient_activity_tax,
-  membership,
+  // membership,
   staff_extra_service,
   patient_advance,
   procedural_service,
-  medical_equipemts,
   fb,
   personal_care,
   getMedicalEmergencyCare,
+  medical_equipemts
 };
