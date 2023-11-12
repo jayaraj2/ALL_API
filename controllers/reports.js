@@ -36,7 +36,7 @@ const getConsolidatedBill = (req, res) => {
     const branchId = usersData.find((user) => user.id === data.patient_id)?.branch_id || 'undefined';
     const branchInfo = masterBranches.find((branch) => branch.id === branchId);
     const activityDate = new Date(data.created_at);
-
+ 
     const isWithinDateRange = (!start || activityDate >= new Date(start)) &&
       (!end || activityDate <= new Date(end));
 
