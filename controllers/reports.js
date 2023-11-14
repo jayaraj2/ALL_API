@@ -36,7 +36,7 @@ const getConsolidatedBill = (req, res) => {
     const branchId = usersData.find((user) => user.id === data.patient_id)?.branch_id || 'undefined';
     const branchInfo = masterBranches.find((branch) => branch.id === branchId);
     const activityDate = new Date(data.created_at);
- 
+
     const isWithinDateRange = (!start || activityDate >= new Date(start)) &&
       (!end || activityDate <= new Date(end));
 
@@ -85,21 +85,37 @@ const getConsolidatedBill = (req, res) => {
   jsonStream.on('end', () => {
     const response = [];
 
-    for (const branchId in branchData) {
-      const branchTotalAmount = parseFloat(branchData[branchId].total_branch_sum_all_statuses);
+    masterBranches.forEach((branchInfo) => {
+      const branchId = branchInfo.id;
 
-      if (branchTotalAmount > 0) {
-        const branchInfo = masterBranches.find((branch) => branch.id === branchId);
-        response.push({
-            branch: branchInfo.branch_name,
-            total_branch_sum_pending: branchData[branchId].total_branch_sum_pending.toFixed(2),
-            total_branch_sum_paid: branchData[branchId].total_branch_sum_paid.toFixed(2),
-            total_branch_sum_partial: branchData[branchId].total_branch_sum_partial.toFixed(2),
-            total_branch_sum_all_statuses: branchData[branchId].total_branch_sum_all_statuses.toFixed(2),
-            data: branchData[branchId].data,
-        });
-    }
-}
+      if (branchData[branchId]) {
+        const branchTotalAmount = parseFloat(branchData[branchId].total_branch_sum_all_statuses);
+
+        const branchResponse = {
+          branch: branchInfo.branch_name,
+          total_branch_sum_pending: branchData[branchId].total_branch_sum_pending.toFixed(2),
+          total_branch_sum_paid: branchData[branchId].total_branch_sum_paid.toFixed(2),
+          total_branch_sum_partial: branchData[branchId].total_branch_sum_partial.toFixed(2),
+          total_branch_sum_all_statuses: branchData[branchId].total_branch_sum_all_statuses.toFixed(2),
+          data: branchData[branchId].data,
+        };
+
+        response.push(branchResponse);
+      } else {
+        // If there is no data for the branch, add an entry with default values
+        const defaultBranchResponse = {
+          branch: branchInfo.branch_name,
+          total_branch_sum_pending: 0.0,
+          total_branch_sum_paid: 0.0,
+          total_branch_sum_partial: 0.0,
+          total_branch_sum_all_statuses: 0.0,
+          data: [],
+        };
+
+        response.push(defaultBranchResponse);
+      }
+    });
+
     for (const branchId in branchData) {
       totalAllBranchSum.total_branch_sum_pending += branchData[branchId].total_branch_sum_pending;
       totalAllBranchSum.total_branch_sum_paid += branchData[branchId].total_branch_sum_paid;
@@ -107,7 +123,10 @@ const getConsolidatedBill = (req, res) => {
       totalAllBranchSum.total_branch_sum_all_statuses += branchData[branchId].total_branch_sum_all_statuses;
     }
 
-    response.unshift(totalAllBranchSum);
+    response.unshift({
+      ...totalAllBranchSum,
+      service_Type: "Staff Extra service"
+    });
 
     res.json(response);
   });
@@ -297,7 +316,7 @@ const fb = (req, res) => {
       const branchInfo = masterBranches.find((branch) => branch.id === branchId);
       response.push({
         branch_name: branchInfo ? branchInfo.branch_name : 'N/A',
-        total_fb_amount: totalBranchSum[branchId].toFixed(2),
+        total_fb_amount: totalBranchSum[branchId],
         data: branchData[branchId].data,
       });
     }
@@ -798,7 +817,7 @@ const patient_advance = (req, res) => {
 
         for (const branchId in branchData) {
           const branchInfo = masterBranches.find((branch) => branch.id === branchId);
-            const branchResponse = { branch_name: branchInfo ? branchInfo.branch_name : 'N/A', total_branch_staff_extra_amount: totalBranchSum[branchId].toFixed(2), data: branchData[branchId].data };
+            const branchResponse = { branch_name: branchInfo ? branchInfo.branch_name : 'N/A', total_branch_staff_extra_amount: totalBranchSum[branchId], data: branchData[branchId].data };
             response.push(branchResponse);
         }
 
