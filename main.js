@@ -1,35 +1,31 @@
-const createError = require("http-errors");
-const express = require("express");
-const path = require("path");
-const cookieParser = require("cookie-parser");
-const logger = require("morgan");
-const bodyParser = require("body-parser");
-const cors = require("cors");
-const chalk = require("chalk");
-const db = require("./db/connection").mysql_pool;
-
-const app = express();
-const PORT = process.env.PORT || 8080;
-
-const colorfulLogger = (req, res, next) => {
-  const logType = req.method === 'POST' ? 'info' : 'warning'; 
-  const logMessage = `${req.method} ${req.url} ${res.statusCode}`;
-  const logColor = logType === 'info' ? chalk.green : chalk.yellow;
-  console.log(logColor(logMessage));
-  next();
-};
-
-// app.use(logger("dev"));
+var createError = require("http-errors");
+var express = require("express");
+var path = require("path");
+var cookieParser = require("cookie-parser");
+var logger = require("morgan");
+var bodyParser = require("body-parser");
+var cors = require("cors");
+var db = require("./db/connection").mysql_pool;
+var port = 8080;
+const https = require("https");
+const fs = require("fs");
+var app = express();
+app.use(logger("dev"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(cors());
 
-app.use(colorfulLogger);
-
 const routes = require("./routes/allroutes");
-app.use("/", routes);
+
+const PORT = process.env.PORT || 8080;
+app.use("/", routes)
+
 
 app.listen(PORT, () => {
-  console.log(chalk.blue(`Server is running on port http://localhost:${PORT}`));
+
+  console.log(`Server is running on port http://localhost:${PORT}`);
 });
+
+
+
