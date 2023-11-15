@@ -102,7 +102,6 @@ const getConsolidatedBill = (req, res) => {
 
         response.push(branchResponse);
       } else {
-        // If there is no data for the branch, add an entry with default values
         const defaultBranchResponse = {
           branch: branchInfo.branch_name,
           total_branch_sum_pending: 0.0,
