@@ -9,6 +9,120 @@ var logger = require("morgan");
 const cors = require('cors');
 
 
+
+
+const tax = (req, res) => {
+  const { branch, start, end, city, state } = req.query;
+  const usersDataPath = 'datas/users.json';
+  const patientSchedulesDataPath = 'datas/patient_schedules.json';
+
+  const usersStream = fs.createReadStream(usersDataPath, { encoding: 'utf8' });
+  const patientSchedulesStream = fs.createReadStream(patientSchedulesDataPath, { encoding: 'utf8' });
+
+  const usersJsonStream = JSONStream.parse('*');
+  const patientSchedulesJsonStream = JSONStream.parse('*');
+
+  usersStream.pipe(usersJsonStream);
+  patientSchedulesStream.pipe(patientSchedulesJsonStream);
+
+  const usersData = {};
+  const patientSchedulesData = {};
+
+  usersJsonStream.on('data', (data) => {
+    usersData[data.id] = data;
+  });
+
+  patientSchedulesJsonStream.on('data', (data) => {
+    patientSchedulesData[data.id] = data;
+  });
+
+  usersJsonStream.on('end', () => {
+    patientSchedulesJsonStream.on('end', () => {
+      const monthlyData = {};
+      const dailyData = {};
+
+      for (const scheduleId in patientSchedulesData) {
+        const data = patientSchedulesData[scheduleId];
+        const branchId = usersData[data.patient_id]?.branch_id;
+
+        if (!branchId) {
+          continue;
+        }
+
+        const activityDate = new Date(data.schedule_date);
+
+        if (
+          data.membership_type === 'Monthly' &&
+          (!branch || branch === branchId) &&
+          (!city || data.branch_city_id == city) &&
+          (!state || data.branch_state_id == state) &&
+          (!start || activityDate >= new Date(start)) &&
+          (!end || activityDate <= new Date(end))
+        ) {
+          if (!monthlyData[branchId]) {
+            monthlyData[branchId] = { total_sum_gross: 0.0, total_tax: 0.0, total_sum_with_tax: 0.0 };
+          }
+
+          monthlyData[branchId].total_sum_gross += parseFloat(data.gross_rate);
+          monthlyData[branchId].total_tax += parseFloat(data.gross_rate) * 0.18;
+          monthlyData[branchId].total_sum_with_tax +=
+            parseFloat(data.gross_rate) + parseFloat(data.gross_rate) * 0.18;
+        }
+
+        if (
+          data.membership_type === 'Daily' &&
+          (!branch || branch === branchId) &&
+          (!city || data.branch_city_id == city) &&
+          (!state || data.branch_state_id == state) &&
+          (!start || activityDate >= new Date(start)) &&
+          (!end || activityDate <= new Date(end))
+        ) {
+          if (!dailyData[branchId]) {
+            dailyData[branchId] = { total_sum_gross: 0.0, total_tax: 0.0, total_sum_with_tax: 0.0 };
+          }
+
+          dailyData[branchId].total_sum_gross += parseFloat(data.gross_rate);
+          dailyData[branchId].total_tax += parseFloat(data.gross_rate) * 0.18;
+          dailyData[branchId].total_sum_with_tax +=
+            parseFloat(data.gross_rate) + parseFloat(data.gross_rate) * 0.18;
+        }
+      }
+
+      const response = [];
+
+      for (const branchId in monthlyData) {
+        const branchInfo = usersData[branchId];
+        if (branchInfo) {
+          const branchResponse = {
+            branch_name: branchInfo.branch_name,
+            total_sum_gross: monthlyData[branchId].total_sum_gross.toFixed(2),
+            total_tax: monthlyData[branchId].total_tax.toFixed(2),
+            total_sum_with_tax: monthlyData[branchId].total_sum_with_tax.toFixed(2),
+          };
+          response.push(branchResponse);
+        }
+      }
+
+      for (const branchId in dailyData) {
+        const branchInfo = usersData[branchId];
+        if (branchInfo) {
+          const branchResponse = {
+            branch_name: branchInfo.branch_name,
+            total_sum_gross: dailyData[branchId].total_sum_gross.toFixed(2),
+            total_tax: dailyData[branchId].total_tax.toFixed(2),
+            total_sum_with_tax: dailyData[branchId].total_sum_with_tax.toFixed(2),
+          };
+          response.push(branchResponse);
+        }
+      }
+
+      res.json(response);
+    });
+  });
+};
+
+
+
 const getConsolidatedBill = (req, res) => {
   const { branch, city, state, start, end } = req.query;
   const usersData = JSON.parse(fs.readFileSync('datas/users.json'));
